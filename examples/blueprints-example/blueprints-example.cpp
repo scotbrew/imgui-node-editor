@@ -12,6 +12,9 @@
 #include <algorithm>
 #include <utility>
 
+// Enable/disable items
+//#define SHOW_GUI_PANELS
+#define USE_DRAWING_LOD
 
 static inline ImRect ImGui_GetItemRect()
 {
@@ -481,6 +484,26 @@ struct Example:
         return &m_Nodes.back();
     }
 
+
+
+    Node* SpawnOzoneDesignSpecNode()
+    {
+        m_Nodes.emplace_back(GetNextId(), "Ozone DesignSpec");
+        m_Nodes.back().Type = NodeType::Blueprint;
+        m_Nodes.back().Inputs.emplace_back(GetNextId(), "Alpha"   , PinType::Int);
+        m_Nodes.back().Inputs.emplace_back(GetNextId(), "Bravo"   , PinType::Bool);
+        m_Nodes.back().Inputs.emplace_back(GetNextId(), "Charlie" , PinType::Delegate);
+        m_Nodes.back().Inputs.emplace_back(GetNextId(), "Delta"   , PinType::Flow);
+        m_Nodes.back().Outputs.emplace_back(GetNextId(), "Echo"   , PinType::Int);
+        m_Nodes.back().Outputs.emplace_back(GetNextId(), "Foxtrot", PinType::Bool);
+        m_Nodes.back().Outputs.emplace_back(GetNextId(), "Golf"   , PinType::Delegate);
+        m_Nodes.back().Outputs.emplace_back(GetNextId(), "Hotel"  , PinType::Flow);
+
+        BuildNode(&m_Nodes.back());
+
+        return &m_Nodes.back();
+    }    
+
     void BuildNodes()
     {
         for (auto& node : m_Nodes)
@@ -527,6 +550,37 @@ struct Example:
         ed::SetCurrentEditor(m_Editor);
 
         Node* node;
+        // ========================================
+        #define OZONE_NODE_STRESS_TEST
+        #ifdef OZONE_NODE_STRESS_TEST
+        constexpr int   kRows      = 5;
+        constexpr int   kCols      = 5;
+        constexpr float kCellW     = 300.f;
+        constexpr float kCellH     = 200.f;
+        for (int col = 0; col < kCols; ++col) {
+            for (int row = 0; row < kRows; ++row) {
+                node = SpawnOzoneDesignSpecNode();
+                ed::SetNodePosition(node->ID, ImVec2(kCellW*row, kCellH*col+1000));
+            }
+        }
+
+        ed::NavigateToContent();
+
+        BuildNodes();
+
+        // Chain each node's "Echo" output into the next node's "Alpha" input
+        // within each column.
+        for (int col = 0; col < kCols - 1; ++col) {
+           for (int row = 0; row < kRows - 1; ++row) {
+               size_t outIdx = static_cast<size_t>(col * kRows + row);
+               size_t inIdx  = static_cast<size_t>(col * kRows + row + 1);
+               m_Links.push_back(Link(GetNextLinkId(), m_Nodes.at(outIdx).Outputs[0].ID, m_Nodes.at(inIdx).Inputs[0].ID));
+           }
+        }
+
+        #else // OZONE_NODE_STRESS_TEST
+        // ========================================
+
         node = SpawnInputActionNode();      ed::SetNodePosition(node->ID, ImVec2(-252, 220));
         node = SpawnBranchNode();           ed::SetNodePosition(node->ID, ImVec2(-300, 351));
         node = SpawnDoNNode();              ed::SetNodePosition(node->ID, ImVec2(-238, 504));
@@ -556,6 +610,8 @@ struct Example:
         m_Links.push_back(Link(GetNextLinkId(), m_Nodes[5].Outputs[0].ID, m_Nodes[7].Inputs[0].ID));
 
         m_Links.push_back(Link(GetNextLinkId(), m_Nodes[14].Outputs[0].ID, m_Nodes[15].Inputs[0].ID));
+
+        #endif // OZONE_NODE_STRESS_TEST
 
         m_HeaderBackground = LoadTexture("data/BlueprintBackground.png");
         m_SaveIcon         = LoadTexture("data/ic_save_white_24dp.png");
@@ -887,6 +943,7 @@ struct Example:
 
         ImGui::EndChild();
     }
+    
 
     void OnFrame(float deltaTime) override
     {
@@ -894,7 +951,7 @@ struct Example:
 
         auto& io = ImGui::GetIO();
 
-        ImGui::Text("FPS: %.2f (%.2gms)", io.Framerate, io.Framerate ? 1000.0f / io.Framerate : 0.0f);
+        //ImGui::Text("FPS: %.2f (%.2gms)", io.Framerate, io.Framerate ? 1000.0f / io.Framerate : 0.0f);
 
         ed::SetCurrentEditor(m_Editor);
 
@@ -919,9 +976,14 @@ struct Example:
 
         static float leftPaneWidth  = 400.0f;
         static float rightPaneWidth = 800.0f;
+
+        // =================================
+        # ifdef SHOW_GUI_PANELS
         Splitter(true, 4.0f, &leftPaneWidth, &rightPaneWidth, 50.0f, 50.0f);
 
         ShowLeftPane(leftPaneWidth - 4.0f);
+        #endif // SHOW_GUI_PANELS
+        // =================================
 
         ImGui::SameLine(0.0f, 12.0f);
 
@@ -1703,6 +1765,8 @@ struct Example:
                 node = SpawnHoudiniTransformNode();
             if (ImGui::MenuItem("Group"))
                 node = SpawnHoudiniGroupNode();
+            if (ImGui::MenuItem("Ozone DesignSpec"))
+                node = SpawnOzoneDesignSpecNode();
 
             if (node)
             {
@@ -1826,10 +1890,10 @@ struct Example:
 
 int Main(int argc, char** argv)
 {
-    Example exampe("Blueprints", argc, argv);
+    Example example("Blueprints", argc, argv);
 
-    if (exampe.Create())
-        return exampe.Run();
+    if (example.Create())
+        return example.Run();
 
     return 0;
 }
